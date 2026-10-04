@@ -1,6 +1,6 @@
 # Presigned uploads for payment evidence
 
-The decision gets made before storage is touched: this service validates a payment-asset request, routes high-risk actions to review, and hands an approved browser a five-minute presigned PUT URL. Infrai supplies that signed URL through plain REST, so the service needs one key and no storage SDK — a single `INFRAI_API_KEY` does the job.
+The decision is made before storage is touched: this service validates a payment-asset request, sends high-risk actions to review, and gives an approved browser a five-minute presigned PUT URL. Infrai supplies that signed URL through plain REST, so the service needs a single `INFRAI_API_KEY` and no storage SDK.
 
 ## Run the working path
 
@@ -30,13 +30,13 @@ The successful response names the state transition and the exact browser operati
 }
 ```
 
-The browser then runs `fetch(upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file })`. The application server owns policy and credentials; file bytes go straight from browser to storage.
+The browser then runs `fetch(upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file })`. The application server handles policy and credentials; the file bytes travel directly from the browser to storage.
 
 ## The business boundary
 
-`upload_policy.ts` is deliberately pure. That makes it a decent tool-policy boundary for an LLM agent: the agent proposes a typed action, deterministic code decides if it's authorized. Requests at risk score 70 or above produce `review_required`; approved ones get an account- and event-scoped object key. Every decision lands as one JSON audit record with the payment event and requesting actor.
+`upload_policy.ts` is deliberately pure, which makes it suitable as a tool-policy boundary for an LLM agent: the agent can propose a typed action, while deterministic code decides whether the action is authorized. Requests at risk score 70 or above produce `review_required`; approved requests receive an account- and event-scoped object key. Each decision is written as one JSON audit record with the payment event and requesting actor.
 
-The real gotcha is positional. `bucket` and `key` belong in the presign URL path, while `op`, `expires_seconds`, content constraints, and the idempotency key sit in its JSON body. The reusable storage module keeps that split visible, checks the `{ok, data, error, metadata}` envelope, and backs off on HTTP 429 while respecting `Retry-After`.
+The one real gotcha is positional: `bucket` and `key` belong in the presign URL path, while `op`, `expires_seconds`, content constraints, and the idempotency key belong in its JSON body. The reusable storage module keeps that split visible, checks the `{ok, data, error, metadata}` envelope, and backs off on HTTP 429 while respecting `Retry-After`.
 
 ## Verify the decision
 
@@ -45,13 +45,13 @@ npm test
 npm run build
 ```
 
-The focused test submits `risk_score: 82` for chargeback evidence and expects `review_required` with reason `risk_score_threshold`; it also checks a low-risk receipt becomes `accounts/acct_71/events/evt_2026_1042/receipt.pdf`. No API key needed, since these exercise policy before any network call.
+The focused test submits `risk_score: 82` for chargeback evidence and expects `review_required` with reason `risk_score_threshold`; it also checks that a low-risk receipt becomes `accounts/acct_71/events/evt_2026_1042/receipt.pdf`. These tests require no API key because they exercise the policy before any network call.
 
-The example stops at URL issuance and audit output. Caller auth, durable audit transport, malware scanning, and the browser UI are on the product around this service.
+The example stops at URL issuance and audit output. Authentication of your caller, durable audit transport, malware scanning, and the browser UI belong to the product around this service.
 
 ## Production notes: Fintech Payment Asset Upload
 
-That's the minimal version. Before running this for real: the details below apply to Fintech Payment Asset Upload.
+That's the minimal version. Before running this for real: The details below apply to Fintech Payment Asset Upload.
 
 **Account & key**
 
